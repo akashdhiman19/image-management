@@ -54,9 +54,12 @@ const ImageGallery = () => {
       })
       .commit();
 
-    alert("Image updated!");
     setEditing(null);
     window.location.reload();
+  };
+
+  const handleSearch = (e) => {
+    setSearchQuery(e.target.value.toLowerCase());
   };
 
   const handleDownload = (imageUrl, title) => {
@@ -69,22 +72,40 @@ const ImageGallery = () => {
   };
 
   const handleSelectImage = (id) => {
-    setSelectedImages((prev) =>
-      prev.includes(id) ? prev.filter((imgId) => imgId !== id) : [...prev, id]
+    setSelectedImages((prevSelected) =>
+      prevSelected.includes(id) ? prevSelected.filter((img) => img !== id) : [...prevSelected, id]
     );
   };
 
-  const handleSendBulkWhatsApp = () => {
-    const selectedImgs = images.filter((img) => selectedImages.includes(img._id));
-    if (selectedImgs.length === 0) return alert("No images selected!");
+  const handleWhatsAppShare = () => {
+    const selectedImgUrls = selectedImages
+      .map((id) => images.find((img) => img._id === id))
+      .filter(Boolean)
+      .map((img) => urlFor(img.image));
 
-    const message = `Sending you selected images!`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    if (selectedImgUrls.length === 0) {
+      alert("Please select at least one image.");
+      return;
+    }
 
-    window.open(whatsappUrl, "_blank");
+    selectedImgUrls.forEach((imageUrl) => {
+      const link = `https://api.whatsapp.com/send?phone=&text=Check%20this%20out!%20${imageUrl}`;
+      window.open(link, "_blank");
+    });
+
+    setSelectedImages([]);
   };
 
-  const categorizedImages = images.reduce((acc, img) => {
+  // **Enhanced Search Logic**
+  const filteredImages = images.filter((img) =>
+    [img.title, img.category, ...(img.tags || [])]
+      .join(" ")
+      .toLowerCase()
+      .includes(searchQuery)
+  );
+
+  // **Organize images into folders based on category**
+  const categorizedImages = filteredImages.reduce((acc, img) => {
     acc[img.category] = acc[img.category] || [];
     acc[img.category].push(img);
     return acc;
@@ -92,29 +113,22 @@ const ImageGallery = () => {
 
   return (
     <div className="p-5 bg-gray-100 min-h-screen">
-      {/* Search Bar */}
+      {/* Search & Bulk Send */}
       <div className="flex items-center gap-2 mb-5">
         <input
           type="text"
-          placeholder="Search images..."
+          placeholder="Search by title, tags, or category..."
           className="w-full p-3 border rounded-lg shadow-md text-black focus:ring-2 focus:ring-red-500 focus:outline-none"
-          onChange={(e) => setSearchQuery(e.target.value)}
+          value={searchQuery}
+          onChange={handleSearch}
         />
         <button
-          onClick={() => setSearchQuery(searchQuery)}
-          className="bg-red-500 text-white px-5 py-3 rounded-lg shadow hover:bg-red-600 transition"
+          onClick={handleWhatsAppShare}
+          className="bg-green-500 text-white px-5 py-3 rounded-lg shadow hover:bg-green-600 transition"
         >
-          Search
+          Send Selected 📤
         </button>
       </div>
-
-      {/* Send Bulk Button */}
-      <button
-        onClick={handleSendBulkWhatsApp}
-        className="mb-5 bg-green-500 text-white px-5 py-3 rounded-lg shadow hover:bg-green-600 transition"
-      >
-        Send Selected Images 📤
-      </button>
 
       {/* Image Folders */}
       <div className="space-y-6">
@@ -123,20 +137,13 @@ const ImageGallery = () => {
             <h2 className="text-xl font-bold text-black">{category}</h2>
             <div ref={galleryRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {imgs.map((img) => (
-                <div
-                  key={img._id}
-                  className={`relative p-4 border rounded-lg shadow-lg bg-white hover:shadow-xl transition-all ${
-                    selectedImages.includes(img._id) ? "border-4 border-green-500" : ""
-                  }`}
-                >
-                  {/* Select Checkbox */}
+                <div key={img._id} className="relative p-4 border rounded-lg shadow-lg bg-white">
                   <input
                     type="checkbox"
-                    className="absolute top-2 left-2 w-5 h-5"
                     checked={selectedImages.includes(img._id)}
                     onChange={() => handleSelectImage(img._id)}
+                    className="absolute top-2 left-2 w-5 h-5"
                   />
-
                   <img
                     src={urlFor(img.image)}
                     alt={img.title}
@@ -175,6 +182,7 @@ const ImageGallery = () => {
                   ) : (
                     <>
                       <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
+                      <p className="text-sm text-black">Category: {img.category}</p>
                       <p className="text-sm text-black">Tags: {img.tags ? img.tags.join(", ") : "No Tags"}</p>
                       <div className="flex mt-3 space-x-2">
                         <button
@@ -191,12 +199,12 @@ const ImageGallery = () => {
                         </button>
                         <button
                           onClick={() => handleDownload(urlFor(img.image, 1000), img.title)}
-                          className="w-1/4 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
+                          className="w-1/4 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
                         >
                           Download
                         </button>
                         <button
-                          onClick={() => window.open(`https://wa.me/?text=${urlFor(img.image)}`, "_blank")}
+                          onClick={() => handleWhatsAppShare(img)}
                           className="w-1/4 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
                         >
                           Send 📤
