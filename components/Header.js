@@ -21,7 +21,7 @@ const Header = () => {
           Welcome to <span className="text-red-500">Gobind Coach Builders</span>
         </h1>
         <p className="text-lg md:text-xl mt-2 opacity-80">
-          Image Management System and custom Database.<br></br>Crafted by Akash Dhiman
+          Image Management System and custom Database.<br></br>Crafted by <u><b>Akash Dhiman</b></u>
         </p>
       </motion.div>
     </div>

@@ -3,11 +3,25 @@ import client from "../lib/sanityClient";
 import { useDropzone } from "react-dropzone";
 import JSZip from "jszip";
 
+const FOLDERS = [
+  "Luxury Bus (Victor)",
+  "Luxury Bus (Kasper)",
+  "Luxury Bus (Tourista)",
+  "Luxury Bus (Hymer)",
+  "Luxury Bus (Spider-Seater)",
+  "Luxury Bus (Arrow)",
+  "Sleeper Bus(Spider)",
+  "Deluxe Buses",
+  "Institutional Buses",
+  "Special Purpose Buses",
+];
+
 const ImageUploader = () => {
   const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState("");
   const [tags, setTags] = useState("");
   const [category, setCategory] = useState("");
+  const [folder, setFolder] = useState(FOLDERS[0]); // Default to first folder
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleFileUpload = async (files) => {
@@ -19,7 +33,6 @@ const ImageUploader = () => {
 
     for (const file of files) {
       if (file.name.endsWith(".zip")) {
-        // If ZIP file, extract images
         const zip = new JSZip();
         const zipData = await zip.loadAsync(file);
         const zipFiles = Object.values(zipData.files);
@@ -31,12 +44,10 @@ const ImageUploader = () => {
           imagesToUpload.push(extractedFile);
         }
       } else {
-        // If regular image, add directly
         imagesToUpload.push(file);
       }
     }
 
-    // Upload all extracted images
     for (const imageFile of imagesToUpload) {
       const asset = await client.assets.upload("image", imageFile);
       await client.create({
@@ -44,6 +55,7 @@ const ImageUploader = () => {
         title,
         tags: tags.split(",").map((tag) => tag.trim()),
         category,
+        folder, // Store selected folder
         image: { _type: "image", asset: { _ref: asset._id } },
       });
 
@@ -52,7 +64,7 @@ const ImageUploader = () => {
     }
 
     setUploading(false);
-    alert(`Uploaded ${uploadedCount} images successfully!`);
+    alert(`Uploaded ${uploadedCount} images to '${folder}' successfully!`);
   };
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -85,6 +97,18 @@ const ImageUploader = () => {
         className="w-full p-2 border rounded-md mb-2 text-black"
         onChange={(e) => setCategory(e.target.value)}
       />
+
+      <select
+        className="w-full p-2 border rounded-md mb-2 text-black"
+        value={folder}
+        onChange={(e) => setFolder(e.target.value)}
+      >
+        {FOLDERS.map((folderName) => (
+          <option key={folderName} value={folderName}>
+            {folderName}
+          </option>
+        ))}
+      </select>
 
       <div
         {...getRootProps()}

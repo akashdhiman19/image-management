@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import client from "../lib/sanityClient";
 import imageUrlBuilder from "@sanity/image-url";
-import gsap from "gsap";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 const builder = imageUrlBuilder(client);
 
@@ -11,17 +12,15 @@ function urlFor(source, width = 800) {
 
 const ImageGallery = () => {
   const [images, setImages] = useState([]);
+  const [openFolders, setOpenFolders] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [editing, setEditing] = useState(null);
-  const [updatedTitle, setUpdatedTitle] = useState("");
-  const [updatedTags, setUpdatedTags] = useState("");
-  const [updatedCategory, setUpdatedCategory] = useState("");
   const [selectedImages, setSelectedImages] = useState([]);
-  const galleryRef = useRef(null);
+  const [editImage, setEditImage] = useState(null);
+  const [editData, setEditData] = useState({ title: "", tags: "", category: "" });
 
   useEffect(() => {
     const fetchImages = async () => {
-      const query = `*[_type == "imageAsset"]{_id, title, tags, category, image}`;
+      const query = `*[_type == "imageAsset"]{_id, title, tags, category, folder, image}`;
       const result = await client.fetch(query);
       setImages(result);
     };
@@ -29,195 +28,177 @@ const ImageGallery = () => {
     fetchImages();
   }, []);
 
-  useEffect(() => {
-    gsap.fromTo(
-      galleryRef.current?.children,
-      { opacity: 0, y: 20 },
-      { opacity: 1, y: 0, stagger: 0.2 }
-    );
-  }, [images]);
-
-  const handleDelete = async (id) => {
-    if (confirm("Are you sure you want to delete this image?")) {
-      await client.delete(id);
-      setImages(images.filter((img) => img._id !== id));
-    }
-  };
-
-  const handleEdit = async (id) => {
-    await client
-      .patch(id)
-      .set({
-        title: updatedTitle,
-        tags: updatedTags.split(",").map((tag) => tag.trim()),
-        category: updatedCategory,
-      })
-      .commit();
-
-    setEditing(null);
-    window.location.reload();
+  const toggleFolder = (folder) => {
+    setOpenFolders((prev) => ({
+      ...prev,
+      [folder]: !prev[folder],
+    }));
   };
 
   const handleSearch = (e) => {
     setSearchQuery(e.target.value.toLowerCase());
   };
 
-  const handleDownload = (imageUrl, title) => {
-    const link = document.createElement("a");
-    link.href = imageUrl;
-    link.download = title || "downloaded_image.jpg";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleSelectImage = (id) => {
-    setSelectedImages((prevSelected) =>
-      prevSelected.includes(id) ? prevSelected.filter((img) => img !== id) : [...prevSelected, id]
+  const toggleSelectImage = (id) => {
+    setSelectedImages((prev) =>
+      prev.includes(id) ? prev.filter((imgId) => imgId !== id) : [...prev, id]
     );
   };
 
-  const handleWhatsAppShare = () => {
-    const selectedImgUrls = selectedImages
-      .map((id) => images.find((img) => img._id === id))
-      .filter(Boolean)
-      .map((img) => urlFor(img.image));
+  const selectAllInFolder = (folder) => {
+    const folderImages = categorizedImages[folder].map((img) => img._id);
+    const allSelected = folderImages.every((id) => selectedImages.includes(id));
+    setSelectedImages(allSelected ? selectedImages.filter((id) => !folderImages.includes(id)) : [...selectedImages, ...folderImages]);
+  };
 
-    if (selectedImgUrls.length === 0) {
-      alert("Please select at least one image.");
-      return;
+  const startEditing = (image) => {
+    setEditImage(image);
+    setEditData({ title: image.title, tags: image.tags.join(", "), category: image.category });
+  };
+
+  const saveEdit = async () => {
+    await client.patch(editImage._id).set({
+      title: editData.title,
+      tags: editData.tags.split(",").map((tag) => tag.trim()),
+      category: editData.category,
+    }).commit();
+
+    setImages(images.map((img) => (img._id === editImage._id ? { ...img, ...editData, tags: editData.tags.split(",") } : img)));
+    setEditImage(null);
+  };
+
+  const bulkDelete = async () => {
+    if (selectedImages.length === 0) return alert("No images selected");
+    for (const id of selectedImages) {
+      await client.delete(id);
     }
-
-    selectedImgUrls.forEach((imageUrl) => {
-      const link = `https://api.whatsapp.com/send?phone=&text=Check%20this%20out!%20${imageUrl}`;
-      window.open(link, "_blank");
-    });
-
+    setImages(images.filter((img) => !selectedImages.includes(img._id)));
     setSelectedImages([]);
   };
 
-  // **Enhanced Search Logic**
-  const filteredImages = images.filter((img) =>
-    [img.title, img.category, ...(img.tags || [])]
-      .join(" ")
-      .toLowerCase()
-      .includes(searchQuery)
-  );
+  const bulkDownload = async () => {
+    if (selectedImages.length === 0) return alert("No images selected");
+    const zip = new JSZip();
+    for (const id of selectedImages) {
+      const img = images.find((img) => img._id === id);
+      const response = await fetch(urlFor(img.image));
+      const blob = await response.blob();
+      zip.file(`${img.title}.jpg`, blob);
+    }
+    zip.generateAsync({ type: "blob" }).then((content) => {
+      saveAs(content, "downloaded_images.zip");
+    });
+  };
 
-  // **Organize images into folders based on category**
-  const categorizedImages = filteredImages.reduce((acc, img) => {
-    acc[img.category] = acc[img.category] || [];
-    acc[img.category].push(img);
+  const categorizedImages = images.reduce((acc, img) => {
+    if (!acc[img.folder]) acc[img.folder] = [];
+    acc[img.folder].push(img);
+    return acc;
+  }, {});
+
+  const filteredImages = Object.entries(categorizedImages).reduce((acc, [folder, imgs]) => {
+    acc[folder] = imgs.filter(
+      (img) =>
+        img.title.toLowerCase().includes(searchQuery) ||
+        img.tags.some((tag) => tag.toLowerCase().includes(searchQuery)) ||
+        img.category.toLowerCase().includes(searchQuery)
+    );
     return acc;
   }, {});
 
   return (
     <div className="p-5 bg-gray-100 min-h-screen">
-      {/* Search & Bulk Send */}
-      <div className="flex items-center gap-2 mb-5">
-        <input
-          type="text"
-          placeholder="Search by title, tags, or category..."
-          className="w-full p-3 border rounded-lg shadow-md text-black focus:ring-2 focus:ring-red-500 focus:outline-none"
-          value={searchQuery}
-          onChange={handleSearch}
-        />
+      {/* Search Bar */}
+      <input
+        type="text"
+        placeholder="Search images..."
+        className="w-full p-3 border rounded-lg mb-4 text-black"
+        value={searchQuery}
+        onChange={handleSearch}
+      />
+
+      {/* Bulk Actions */}
+      <div className="mb-4 flex gap-4">
         <button
-          onClick={handleWhatsAppShare}
-          className="bg-green-500 text-white px-5 py-3 rounded-lg shadow hover:bg-green-600 transition"
+          className="p-2 bg-red-500 text-white rounded-md disabled:opacity-50"
+          onClick={bulkDelete}
+          disabled={selectedImages.length === 0}
         >
-          Send Selected 📤
+          Bulk Delete
+        </button>
+        <button
+          className="p-2 bg-blue-500 text-white rounded-md disabled:opacity-50"
+          onClick={bulkDownload}
+          disabled={selectedImages.length === 0}
+        >
+          Bulk Download
         </button>
       </div>
 
-      {/* Image Folders */}
-      <div className="space-y-6">
-        {Object.entries(categorizedImages).map(([category, imgs]) => (
-          <div key={category}>
-            <h2 className="text-xl font-bold text-black">{category}</h2>
-            <div ref={galleryRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {imgs.map((img) => (
-                <div key={img._id} className="relative p-4 border rounded-lg shadow-lg bg-white">
-                  <input
-                    type="checkbox"
-                    checked={selectedImages.includes(img._id)}
-                    onChange={() => handleSelectImage(img._id)}
-                    className="absolute top-2 left-2 w-5 h-5"
-                  />
-                  <img
-                    src={urlFor(img.image)}
-                    alt={img.title}
-                    className="rounded-lg w-full h-64 object-cover cursor-pointer hover:scale-105 transition"
-                  />
-                  {editing === img._id ? (
-                    <div className="mt-3">
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded"
-                        placeholder="New Title"
-                        defaultValue={img.title}
-                        onChange={(e) => setUpdatedTitle(e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded mt-2"
-                        placeholder="New Tags (comma separated)"
-                        defaultValue={img.tags ? img.tags.join(", ") : ""}
-                        onChange={(e) => setUpdatedTags(e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="w-full p-2 border rounded mt-2"
-                        placeholder="New Category"
-                        defaultValue={img.category}
-                        onChange={(e) => setUpdatedCategory(e.target.value)}
-                      />
-                      <button
-                        onClick={() => handleEdit(img._id)}
-                        className="w-full mt-3 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
-                      >
-                        Save Changes
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
-                      <p className="text-sm text-black">Category: {img.category}</p>
-                      <p className="text-sm text-black">Tags: {img.tags ? img.tags.join(", ") : "No Tags"}</p>
-                      <div className="flex mt-3 space-x-2">
-                        <button
-                          onClick={() => setEditing(img._id)}
-                          className="w-1/4 bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(img._id)}
-                          className="w-1/4 bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => handleDownload(urlFor(img.image, 1000), img.title)}
-                          className="w-1/4 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
-                        >
-                          Download
-                        </button>
-                        <button
-                          onClick={() => handleWhatsAppShare(img)}
-                          className="w-1/4 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 transition"
-                        >
-                          Send 📤
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+      {/* Folder View */}
+      {Object.entries(filteredImages).map(([folder, imgs]) => (
+        <div key={folder} className="mb-6">
+          <button
+            className="w-full bg-gray-300 text-black font-semibold p-3 rounded-lg shadow-md text-left"
+            onClick={() => toggleFolder(folder)}
+          >
+            {openFolders[folder] ? "▼" : "▶"} {folder}
+          </button>
+          {openFolders[folder] && (
+            <>
+              <button
+                className="mt-2 p-2 bg-gray-600 text-white rounded-md"
+                onClick={() => selectAllInFolder(folder)}
+              >
+                Select All in {folder}
+              </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-3">
+                {imgs.map((img) => (
+                  <div key={img._id} className="relative p-4 border rounded-lg shadow-lg bg-white">
+                    <img
+                      src={urlFor(img.image)}
+                      alt={img.title}
+                      className="rounded-lg w-full h-64 object-cover"
+                    />
+                    <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
+                    <p className="text-gray-600">Tags: {img.tags.join(", ")}</p>
+                    <p className="text-gray-600">Category: {img.category}</p>
+
+                    {/* Select Checkbox */}
+                    <input
+                      type="checkbox"
+                      className="absolute top-3 right-3 w-5 h-5"
+                      checked={selectedImages.includes(img._id)}
+                      onChange={() => toggleSelectImage(img._id)}
+                    />
+
+                    {/* Edit Button */}
+                    <button
+                      className="mt-2 bg-yellow-500 text-black p-1 rounded-md"
+                      onClick={() => startEditing(img)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ))}
+
+      {/* Edit Modal */}
+      {editImage && (
+        <div className="fixed inset-0 bg-black flex justify-center items-center">
+          <div className="bg-white p-5 rounded-lg shadow-lg">
+            <h2 className="text-xl text-black font-bold">Edit Image</h2>
+            <input className="text-black" type="text" placeholder="Enter Title" value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} />
+            <input className="text-black" type="text" placeholder="Enter Tags" value={editData.tags} onChange={(e) => setEditData({ ...editData, tags: e.target.value })} />
+            <input className="text-black" type="text" placeholder="Enter Category" value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })} />
+            <button onClick={saveEdit} className="bg-green-500 text-white p-2 rounded-md mt-3">Save</button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
