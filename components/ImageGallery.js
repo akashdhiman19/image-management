@@ -16,7 +16,6 @@ const ImageGallery = () => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [editImage, setEditImage] = useState(null);
   const [editData, setEditData] = useState({ title: "", tags: "", category: "" });
-  const [fullScreenImage, setFullScreenImage] = useState(null);
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -43,12 +42,6 @@ const ImageGallery = () => {
     setSelectedImages((prev) =>
       prev.includes(id) ? prev.filter((imgId) => imgId !== id) : [...prev, id]
     );
-  };
-
-  const selectAllInFolder = (folder) => {
-    const folderImages = categorizedImages[folder].map((img) => img._id);
-    const allSelected = folderImages.every((id) => selectedImages.includes(id));
-    setSelectedImages(allSelected ? selectedImages.filter((id) => !folderImages.includes(id)) : [...selectedImages, ...folderImages]);
   };
 
   const startEditing = (image) => {
@@ -78,7 +71,6 @@ const ImageGallery = () => {
 
   const bulkDownload = async () => {
     if (selectedImages.length === 0) return alert("No images selected");
-
     for (const id of selectedImages) {
       const img = images.find((img) => img._id === id);
       const response = await fetch(urlFor(img.image));
@@ -87,10 +79,30 @@ const ImageGallery = () => {
     }
   };
 
-  const downloadImage = async (img) => {
-    const response = await fetch(urlFor(img.image));
-    const blob = await response.blob();
-    saveAs(blob, `${img.title}.jpg`);
+  const sendToWhatsApp = async () => {
+    if (selectedImages.length === 0) return alert("No images selected");
+
+    const imageBlobs = [];
+
+    for (const id of selectedImages) {
+      const img = images.find((img) => img._id === id);
+      const response = await fetch(urlFor(img.image));
+      const blob = await response.blob();
+      imageBlobs.push(blob);
+    }
+
+    const files = imageBlobs.map((blob) => new File([blob], "image.jpg", { type: "image/jpeg" }));
+    const shareData = { files };
+
+    if (navigator.canShare && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (error) {
+        alert("Error sharing images: " + error.message);
+      }
+    } else {
+      alert("Sharing not supported on this device.");
+    }
   };
 
   const categorizedImages = images.reduce((acc, img) => {
@@ -122,87 +134,65 @@ const ImageGallery = () => {
 
       {/* Bulk Actions */}
       <div className="mb-4 flex gap-4">
-        <button
-          className="p-2 bg-red-500 text-white rounded-md disabled:opacity-50"
-          onClick={bulkDelete}
-          disabled={selectedImages.length === 0}
-        >
+        <button className="p-2 bg-red-500 text-white rounded-md" onClick={bulkDelete}>
           Bulk Delete
         </button>
-        <button
-          className="p-2 bg-blue-500 text-white rounded-md disabled:opacity-50"
-          onClick={bulkDownload}
-          disabled={selectedImages.length === 0}
-        >
+        <button className="p-2 bg-blue-500 text-white rounded-md" onClick={bulkDownload}>
           Bulk Download
+        </button>
+        <button className="p-2 bg-green-500 text-white rounded-md" onClick={sendToWhatsApp}>
+          Send to WhatsApp
         </button>
       </div>
 
       {/* Folder View */}
       {Object.entries(filteredImages).map(([folder, imgs]) => (
         <div key={folder} className="mb-6">
-          <button
-            className="w-full bg-gray-300 text-black font-semibold p-3 rounded-lg shadow-md text-left"
-            onClick={() => toggleFolder(folder)}
-          >
+          <button className="w-full bg-gray-300 text-black font-semibold p-3 rounded-lg shadow-md" onClick={() => toggleFolder(folder)}>
             {openFolders[folder] ? "▼" : "▶"} {folder}
           </button>
           {openFolders[folder] && (
-            <>
-              <button
-                className="mt-2 p-2 bg-gray-600 text-white rounded-md"
-                onClick={() => selectAllInFolder(folder)}
-              >
-                Select All in {folder}
-              </button>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-3">
-                {imgs.map((img) => (
-                  <div key={img._id} className="relative p-4 border rounded-lg shadow-lg bg-white">
-                    <img
-                      src={urlFor(img.image)}
-                      alt={img.title}
-                      className="rounded-lg w-full h-64 object-cover cursor-pointer"
-                      onClick={() => setFullScreenImage(img)}
-                    />
-                    <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
-                    <p className="text-gray-600">Tags: {img.tags.join(", ")}</p>
-                    <p className="text-gray-600">Category: {img.category}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-3">
+              {imgs.map((img) => (
+                <div key={img._id} className="relative p-4 border rounded-lg shadow-lg bg-white">
+                  <img
+                    src={urlFor(img.image)}
+                    alt={img.title}
+                    className="rounded-lg w-full h-64 object-cover cursor-pointer"
+                  />
+                  <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
+                  <p className="text-gray-600">Tags: {img.tags.join(", ")}</p>
+                  <p className="text-gray-600">Category: {img.category}</p>
 
-                    {/* Select Checkbox */}
-                    <input
-                      type="checkbox"
-                      className="absolute top-3 right-3 w-5 h-5"
-                      checked={selectedImages.includes(img._id)}
-                      onChange={() => toggleSelectImage(img._id)}
-                    />
+                  {/* Select Checkbox */}
+                  <input
+                    type="checkbox"
+                    className="absolute top-3 right-3 w-5 h-5"
+                    checked={selectedImages.includes(img._id)}
+                    onChange={() => toggleSelectImage(img._id)}
+                  />
 
-                    {/* Download Button */}
-                    <button
-                      className="mt-2 bg-blue-500 text-white p-1 rounded-md"
-                      onClick={() => downloadImage(img)}
-                    >
-                      Download
-                    </button>
-
-                    {/* Edit Button */}
-                    <button
-                      className="mt-2 bg-yellow-500 text-black p-1 rounded-md"
-                      onClick={() => startEditing(img)}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
+                  {/* Edit Button */}
+                  <button className="mt-2 bg-yellow-500 text-black p-1 rounded-md" onClick={() => startEditing(img)}>
+                    Edit
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       ))}
 
-      {/* Full-Screen Image */}
-      {fullScreenImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center" onClick={() => setFullScreenImage(null)}>
-          <img src={urlFor(fullScreenImage.image)} alt={fullScreenImage.title} className="max-w-full max-h-full" />
+      {/* Edit Modal */}
+      {editImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center">
+          <div className="bg-white p-6 rounded-lg w-1/3">
+            <h2 className="text-xl font-bold mb-4">Edit Image</h2>
+            <input type="text" className="border p-2 w-full mb-3" value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} />
+            <button className="bg-blue-500 text-white p-2 rounded-md" onClick={saveEdit}>
+              Save
+            </button>
+          </div>
         </div>
       )}
     </div>
