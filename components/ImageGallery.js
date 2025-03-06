@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import client from "../lib/sanityClient";
 import imageUrlBuilder from "@sanity/image-url";
-import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
 const builder = imageUrlBuilder(client);
@@ -17,6 +16,7 @@ const ImageGallery = () => {
   const [selectedImages, setSelectedImages] = useState([]);
   const [editImage, setEditImage] = useState(null);
   const [editData, setEditData] = useState({ title: "", tags: "", category: "" });
+  const [fullScreenImage, setFullScreenImage] = useState(null);
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -78,16 +78,19 @@ const ImageGallery = () => {
 
   const bulkDownload = async () => {
     if (selectedImages.length === 0) return alert("No images selected");
-    const zip = new JSZip();
+
     for (const id of selectedImages) {
       const img = images.find((img) => img._id === id);
       const response = await fetch(urlFor(img.image));
       const blob = await response.blob();
-      zip.file(`${img.title}.jpg`, blob);
+      saveAs(blob, `${img.title}.jpg`);
     }
-    zip.generateAsync({ type: "blob" }).then((content) => {
-      saveAs(content, "downloaded_images.zip");
-    });
+  };
+
+  const downloadImage = async (img) => {
+    const response = await fetch(urlFor(img.image));
+    const blob = await response.blob();
+    saveAs(blob, `${img.title}.jpg`);
   };
 
   const categorizedImages = images.reduce((acc, img) => {
@@ -158,7 +161,8 @@ const ImageGallery = () => {
                     <img
                       src={urlFor(img.image)}
                       alt={img.title}
-                      className="rounded-lg w-full h-64 object-cover"
+                      className="rounded-lg w-full h-64 object-cover cursor-pointer"
+                      onClick={() => setFullScreenImage(img)}
                     />
                     <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
                     <p className="text-gray-600">Tags: {img.tags.join(", ")}</p>
@@ -171,6 +175,14 @@ const ImageGallery = () => {
                       checked={selectedImages.includes(img._id)}
                       onChange={() => toggleSelectImage(img._id)}
                     />
+
+                    {/* Download Button */}
+                    <button
+                      className="mt-2 bg-blue-500 text-white p-1 rounded-md"
+                      onClick={() => downloadImage(img)}
+                    >
+                      Download
+                    </button>
 
                     {/* Edit Button */}
                     <button
@@ -187,16 +199,10 @@ const ImageGallery = () => {
         </div>
       ))}
 
-      {/* Edit Modal */}
-      {editImage && (
-        <div className="fixed inset-0 bg-black flex justify-center items-center">
-          <div className="bg-white p-5 rounded-lg shadow-lg">
-            <h2 className="text-xl text-black font-bold">Edit Image</h2>
-            <input className="text-black" type="text" placeholder="Enter Title" value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} />
-            <input className="text-black" type="text" placeholder="Enter Tags" value={editData.tags} onChange={(e) => setEditData({ ...editData, tags: e.target.value })} />
-            <input className="text-black" type="text" placeholder="Enter Category" value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })} />
-            <button onClick={saveEdit} className="bg-green-500 text-white p-2 rounded-md mt-3">Save</button>
-          </div>
+      {/* Full-Screen Image */}
+      {fullScreenImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center" onClick={() => setFullScreenImage(null)}>
+          <img src={urlFor(fullScreenImage.image)} alt={fullScreenImage.title} className="max-w-full max-h-full" />
         </div>
       )}
     </div>
