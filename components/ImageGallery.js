@@ -15,7 +15,8 @@ const ImageGallery = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedImages, setSelectedImages] = useState([]);
   const [editImage, setEditImage] = useState(null);
-  const [editData, setEditData] = useState({ title: "", tags: "", category: "" });
+  const [editData, setEditData] = useState({ title: "", tags: "" });
+  const [fullscreenImage, setFullscreenImage] = useState(null);
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -46,17 +47,21 @@ const ImageGallery = () => {
 
   const startEditing = (image) => {
     setEditImage(image);
-    setEditData({ title: image.title, tags: image.tags.join(", "), category: image.category });
+    setEditData({ title: image.title, tags: image.tags.join(", ") });
   };
 
   const saveEdit = async () => {
+    if (!editImage) return;
+    
     await client.patch(editImage._id).set({
       title: editData.title,
-      tags: editData.tags.split(",").map((tag) => tag.trim()),
-      category: editData.category,
+      tags: editData.tags.split(",").map((tag) => tag.trim())
     }).commit();
 
-    setImages(images.map((img) => (img._id === editImage._id ? { ...img, ...editData, tags: editData.tags.split(",") } : img)));
+    setImages(images.map((img) => 
+      img._id === editImage._id ? { ...img, ...editData, tags: editData.tags.split(",") } : img
+    ));
+    
     setEditImage(null);
   };
 
@@ -159,10 +164,10 @@ const ImageGallery = () => {
                     src={urlFor(img.image)}
                     alt={img.title}
                     className="rounded-lg w-full h-64 object-cover cursor-pointer"
+                    onClick={() => setFullscreenImage(img)}
                   />
                   <h3 className="text-lg font-semibold text-black mt-2">{img.title}</h3>
                   <p className="text-gray-600">Tags: {img.tags.join(", ")}</p>
-                  <p className="text-gray-600">Category: {img.category}</p>
 
                   {/* Select Checkbox */}
                   <input
@@ -188,10 +193,28 @@ const ImageGallery = () => {
         <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center">
           <div className="bg-white p-6 rounded-lg w-1/3">
             <h2 className="text-xl font-bold mb-4">Edit Image</h2>
-            <input type="text" className="border p-2 w-full mb-3" value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} />
-            <button className="bg-blue-500 text-white p-2 rounded-md" onClick={saveEdit}>
-              Save
-            </button>
+            <input
+              type="text"
+              className="border p-2 w-full mb-3"
+              placeholder="Title"
+              value={editData.title}
+              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+            />
+            <input
+              type="text"
+              className="border p-2 w-full mb-3"
+              placeholder="Tags (comma-separated)"
+              value={editData.tags}
+              onChange={(e) => setEditData({ ...editData, tags: e.target.value })}
+            />
+            <div className="flex gap-2">
+              <button className="bg-blue-500 text-white p-2 rounded-md" onClick={saveEdit}>
+                Save
+              </button>
+              <button className="bg-red-500 text-white p-2 rounded-md" onClick={() => setEditImage(null)}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
