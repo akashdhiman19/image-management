@@ -11,10 +11,10 @@ const Navbar = () => {
         <Image src="/GC_Logo.png" alt="Logo" width={250} height={100} />
       </div>
 
-      {/* Logout Button (only visible if user is logged in) */}
+      {/* Logout Button */}
       {session && (
         <button
-          onClick={() => signOut()}
+          onClick={() => signOut({ callbackUrl: "/" })} // Redirects to homepage after logout
           className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg"
         >
           Logout

@@ -127,7 +127,23 @@ const ImageGallery = () => {
   }, {});
 
   return (
+    
     <div className="p-5 bg-gray-100 min-h-screen">
+      {fullscreenImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50">
+          <img
+            src={urlFor(fullscreenImage.image, 1200)}
+            alt={fullscreenImage.title}
+            className="max-w-full max-h-full rounded-lg"
+          />
+          <button
+            className="absolute top-5 right-5 bg-red-500 text-white p-2 rounded-full"
+            onClick={() => setFullscreenImage(null)}
+          >
+            ✖
+          </button>
+        </div>
+      )}
       {/* Search Bar */}
       <input
         type="text"
