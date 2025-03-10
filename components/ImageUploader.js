@@ -10,9 +10,11 @@ const FOLDERS = [
   "Luxury Bus (Hymer)",
   "Luxury Bus (Spider-Seater)",
   "Luxury Bus (Arrow)",
-  "Sleeper Bus(Spider)",
+  "Semi Deluxe Buses",
   "Deluxe Buses",
-  "Institutional Buses",
+  "Institutional Buses(College)",
+  "Institutional Buses(School)",
+  "Institutional Buses(Staff)",
   "Special Purpose Buses",
 ];
 
