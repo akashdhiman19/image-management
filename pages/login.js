@@ -39,7 +39,7 @@ export default function Login() {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="relative bg-white bg-opacity-20 backdrop-blur-lg p-12 w-[400px] md:w-[500px] lg:w-[600px] rounded-3xl shadow-2xl text-center"
       >
-        <h2 className="text-3xl font-bold text-white mb-6">Welcome Back to the software developed by Akash Dhiman</h2>
+        <h2 className="text-3xl font-bold text-white mb-6">Welcome Back! Greetings From Akash Dhiman</h2>
         {error && <p className="text-red-500 text-lg">{error}</p>}
 
         <form onSubmit={handleLogin} className="flex flex-col gap-6">
